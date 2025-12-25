@@ -12,7 +12,13 @@ Automated pipeline for generating 3D models from 2D images.
 
 ### Docker (building)
 ```bash
-docker build -f docker/Dockerfile -t forge3d-pipeline:latest .
+docker build -f docker/Dockerfile -t kamui:latest .
+
+# Tag the image
+docker tag kamui:latest ghcr.io/elthworth/kamui:latest
+
+# Push to GitHub Container Registry
+docker push ghcr.io/elthworth/kamui:latest
 ```
 
 ## Run pipeline

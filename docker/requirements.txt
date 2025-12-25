@@ -13,10 +13,12 @@ pydantic==2.12.5
 pydantic-settings==2.12.0
 pydantic-tensor==0.2.0
 spconv-cu126==2.3.8
+easydict
 
-# Transformers and AI (removed peft - not used)
+# Transformers and AI
 transformers==4.55.4
 accelerate==1.12.0
+peft
 
 # Kamui enhancement (only scikit-learn for KMeans in background removal)
 scikit-learn==1.6.1
