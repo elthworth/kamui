@@ -33,6 +33,12 @@ class BackgroundRemovalService:
         self.use_adaptive_threshold = self.settings.use_adaptive_threshold
         self.enable_antialiasing = self.settings.enable_antialiasing
         self.enable_quality_metrics = self.settings.enable_quality_metrics
+        
+        # Transparency enhancement settings
+        self.enable_transparency_boost = self.settings.enable_transparency_boost
+        self.transparency_detection_threshold = self.settings.transparency_detection_threshold
+        self.transparency_boost_factor = self.settings.transparency_boost_factor
+        self.edge_preserve_width = self.settings.edge_preserve_width
 
         # Set device
         self.device = f"cuda:{settings.qwen_gpu}" if torch.cuda.is_available() else "cpu"
@@ -215,6 +221,10 @@ class BackgroundRemovalService:
             logger.info(f"BG removal quality: confidence={metrics['mask_confidence_mean']:.3f}, "
                        f"coverage={metrics['alpha_coverage']:.2%}, "
                        f"edge_sharpness={metrics['edge_sharpness']:.3f}")
+        
+        # Kamui Enhancement: Boost transparency for glass/transparent objects
+        if self.enable_transparency_boost:
+            output = self._enhance_transparency(image_tensor, output)
         
         return output
     
@@ -424,5 +434,153 @@ class BackgroundRemovalService:
             'alpha_coverage': alpha_coverage,
             'edge_sharpness': edge_sharpness
         }
-
-
+    
+    def _enhance_transparency(self, original_image: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
+        """
+        Enhance transparency for glass/transparent objects by detecting regions where
+        the back of the object is visible through the front (low color variance).
+        
+        Args:
+            original_image: Original RGB tensor before background removal (3, H, W)
+            output: Output RGBA tensor after background removal (4, H, W)
+            
+        Returns:
+            Enhanced RGBA tensor with boosted transparency
+        """
+        try:
+            # Extract RGB and alpha channels
+            rgb = output[:3]  # (3, H, W)
+            alpha = output[3:4]  # (1, H, W)
+            
+            # Detect transparent regions by looking for low color variance
+            # Glass objects show the background through them, creating uniform color regions
+            transparency_mask = self._detect_transparent_regions(rgb, alpha.squeeze())
+            
+            if transparency_mask.sum() > 0:
+                # Apply transparency boost to detected glass regions
+                boosted_alpha = alpha.clone()
+                
+                # Reduce alpha in transparent regions (make them more see-through)
+                boosted_alpha[0, transparency_mask] *= self.transparency_boost_factor
+                
+                # Preserve edges (don't make them transparent)
+                edge_mask = self._get_edge_mask(alpha.squeeze())
+                boosted_alpha[0, edge_mask] = alpha[0, edge_mask]
+                
+                # Create enhanced output
+                enhanced_output = torch.cat([rgb, boosted_alpha], dim=0)
+                
+                glass_pixels = transparency_mask.sum().item()
+                total_pixels = transparency_mask.numel()
+                logger.info(f"Transparency enhanced: {glass_pixels}/{total_pixels} pixels "
+                          f"({glass_pixels/total_pixels:.1%}) detected as glass/transparent")
+                
+                return enhanced_output
+            else:
+                logger.debug("No transparent regions detected")
+                return output
+                
+        except Exception as e:
+            logger.warning(f"Transparency enhancement failed: {e}")
+            return output
+    
+    def _detect_transparent_regions(self, rgb: torch.Tensor, alpha: torch.Tensor) -> torch.Tensor:
+        """
+        Detect regions that are likely transparent/glass by analyzing color variance.
+        
+        Glass objects show low local color variance because you see through them.
+        
+        Args:
+            rgb: RGB tensor (3, H, W)
+            alpha: Alpha mask (H, W)
+            
+        Returns:
+            Boolean mask of transparent regions (H, W)
+        """
+        import torch.nn.functional as F
+        
+        # Only analyze regions within the object (alpha > threshold)
+        object_mask = alpha > self.mask_threshold
+        
+        if object_mask.sum() == 0:
+            return torch.zeros_like(alpha, dtype=torch.bool)
+        
+        # Calculate local color variance using a sliding window
+        # Convert RGB to grayscale for simpler variance calculation
+        gray = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]  # (H, W)
+        
+        # Use average pooling to get local mean
+        kernel_size = 5
+        padding = kernel_size // 2
+        gray_expanded = gray.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+        
+        # Local mean
+        local_mean = F.avg_pool2d(gray_expanded, kernel_size, stride=1, padding=padding)
+        local_mean = local_mean.squeeze()
+        
+        # Local variance: E[X^2] - E[X]^2
+        gray_squared = gray ** 2
+        gray_squared_expanded = gray_squared.unsqueeze(0).unsqueeze(0)
+        local_mean_squared = F.avg_pool2d(gray_squared_expanded, kernel_size, stride=1, padding=padding)
+        local_mean_squared = local_mean_squared.squeeze()
+        
+        local_variance = local_mean_squared - local_mean ** 2
+        
+        # Transparent regions have low variance
+        low_variance_mask = local_variance < self.transparency_detection_threshold
+        
+        # Only consider regions within the object
+        transparent_mask = low_variance_mask & object_mask
+        
+        # Apply morphological operations to clean up the mask
+        # Erode to remove noise, then dilate to restore size
+        transparent_mask_expanded = transparent_mask.unsqueeze(0).unsqueeze(0).float()
+        
+        # Simple erosion (min pooling)
+        eroded = F.max_pool2d(-transparent_mask_expanded, 3, stride=1, padding=1)
+        eroded = (-eroded).squeeze() > 0.5
+        
+        # Simple dilation (max pooling)
+        dilated = F.max_pool2d(eroded.unsqueeze(0).unsqueeze(0).float(), 3, stride=1, padding=1)
+        dilated = dilated.squeeze() > 0.5
+        
+        return dilated
+    
+    def _get_edge_mask(self, alpha: torch.Tensor) -> torch.Tensor:
+        """
+        Get edge mask to preserve edges from transparency enhancement.
+        
+        Args:
+            alpha: Alpha channel (H, W)
+            
+        Returns:
+            Boolean mask of edge regions (H, W)
+        """
+        import torch.nn.functional as F
+        
+        # Calculate gradient magnitude
+        alpha_expanded = alpha.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+        
+        # Sobel filters for edge detection
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], 
+                               dtype=alpha.dtype, device=alpha.device).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], 
+                               dtype=alpha.dtype, device=alpha.device).view(1, 1, 3, 3)
+        
+        grad_x = F.conv2d(alpha_expanded, sobel_x, padding=1)
+        grad_y = F.conv2d(alpha_expanded, sobel_y, padding=1)
+        
+        gradient_magnitude = torch.sqrt(grad_x ** 2 + grad_y ** 2).squeeze()
+        
+        # Edge mask: high gradient regions
+        edge_mask = gradient_magnitude > 0.1
+        
+        # Dilate edge mask to preserve wider edge region
+        if self.edge_preserve_width > 0:
+            iterations = self.edge_preserve_width // 2
+            edge_mask_expanded = edge_mask.unsqueeze(0).unsqueeze(0).float()
+            for _ in range(iterations):
+                edge_mask_expanded = F.max_pool2d(edge_mask_expanded, 3, stride=1, padding=1)
+            edge_mask = edge_mask_expanded.squeeze() > 0.5
+        
+        return edge_mask

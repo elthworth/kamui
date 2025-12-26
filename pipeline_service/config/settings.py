@@ -51,11 +51,11 @@ class Settings(BaseSettings):
     padding_percentage: float = Field(default=0.2, env="PADDING_PERCENTAGE")
     limit_padding: bool = Field(default=True, env="LIMIT_PADDING")
     
-    # Kamui Enhancement: Mask Thresholding
-    mask_threshold: float = Field(default=0.8, env="MASK_THRESHOLD", description="Threshold for object detection")
-    mask_threshold_min: float = Field(default=0.5, env="MASK_THRESHOLD_MIN", description="Minimum allowed threshold")
+    # Kamui Enhancement: Mask Thresholding (Lowered for transparent objects)
+    mask_threshold: float = Field(default=0.5, env="MASK_THRESHOLD", description="Threshold for object detection - lower captures transparent objects")
+    mask_threshold_min: float = Field(default=0.3, env="MASK_THRESHOLD_MIN", description="Minimum allowed threshold")
     mask_threshold_max: float = Field(default=0.95, env="MASK_THRESHOLD_MAX", description="Maximum allowed threshold")
-    use_adaptive_threshold: bool = Field(default=False, env="USE_ADAPTIVE_THRESHOLD", description="Use Otsu's method for threshold")
+    use_adaptive_threshold: bool = Field(default=True, env="USE_ADAPTIVE_THRESHOLD", description="Use Otsu's method for threshold")
     
     # Kamui Enhancement: Mask Quality
     mask_quantization_bits: int = Field(default=0, env="MASK_QUANTIZATION_BITS", description="0=no quantization (best quality)")
@@ -66,13 +66,19 @@ class Settings(BaseSettings):
     use_smart_padding: bool = Field(default=True, env="USE_SMART_PADDING", description="Adapt padding to object shape")
     adaptive_padding_factor: float = Field(default=1.5, env="ADAPTIVE_PADDING_FACTOR", description="Extra padding for elongated objects")
     
-    # Kamui Enhancement: Object Validation
-    min_object_coverage: float = Field(default=0.05, env="MIN_OBJECT_COVERAGE", description="Minimum object size (5% of image)")
-    max_object_coverage: float = Field(default=0.95, env="MAX_OBJECT_COVERAGE", description="Maximum object size (95% of image)")
+    # Kamui Enhancement: Object Validation (Relaxed for multi-object scenes)
+    min_object_coverage: float = Field(default=0.02, env="MIN_OBJECT_COVERAGE", description="Minimum object size (2% of image) - lower for small objects")
+    max_object_coverage: float = Field(default=0.98, env="MAX_OBJECT_COVERAGE", description="Maximum object size (98% of image)")
     
     # Kamui Enhancement: Quality Monitoring
     enable_quality_metrics: bool = Field(default=True, env="ENABLE_QUALITY_METRICS", description="Calculate quality metrics")
     log_centering_quality: bool = Field(default=True, env="LOG_CENTERING_QUALITY", description="Log object centering quality")
+    
+    # Kamui Enhancement: Transparency Enhancement for Glass Objects
+    enable_transparency_boost: bool = Field(default=True, env="ENABLE_TRANSPARENCY_BOOST", description="Enhance transparency for glass/transparent objects")
+    transparency_detection_threshold: float = Field(default=0.15, env="TRANSPARENCY_DETECTION_THRESHOLD", description="Variance threshold to detect transparent regions")
+    transparency_boost_factor: float = Field(default=0.6, env="TRANSPARENCY_BOOST_FACTOR", description="How much to reduce alpha (0.6 = 60% reduction for glass)")
+    edge_preserve_width: int = Field(default=10, env="EDGE_PRESERVE_WIDTH", description="Pixels from edge to preserve (not make transparent)")
 
     class Config:
         env_file = ".env"
