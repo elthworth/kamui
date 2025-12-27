@@ -48,13 +48,13 @@ class Settings(BaseSettings):
     background_removal_model_id: str = Field(default="hiepnd11/rm_back2.0", env="BACKGROUND_REMOVAL_MODEL_ID")
     input_image_size: tuple[int, int] = Field(default=(1024, 1024), env="INPUT_IMAGE_SIZE") # (height, width)
     output_image_size: tuple[int, int] = Field(default=(518, 518), env="OUTPUT_IMAGE_SIZE") # (height, width)
-    padding_percentage: float = Field(default=0.25, env="PADDING_PERCENTAGE")
+    padding_percentage: float = Field(default=0.22, env="PADDING_PERCENTAGE")
     limit_padding: bool = Field(default=True, env="LIMIT_PADDING")
     
     # Kamui Enhancement: Mask Thresholding (Lowered for transparent objects)
-    mask_threshold: float = Field(default=0.5, env="MASK_THRESHOLD", description="Threshold for object detection - lower captures transparent objects")
+    mask_threshold: float = Field(default=0.4, env="MASK_THRESHOLD", description="Threshold for object detection - lower captures transparent objects")
     mask_threshold_min: float = Field(default=0.3, env="MASK_THRESHOLD_MIN", description="Minimum allowed threshold")
-    mask_threshold_max: float = Field(default=0.95, env="MASK_THRESHOLD_MAX", description="Maximum allowed threshold")
+    mask_threshold_max: float = Field(default=0.7, env="MASK_THRESHOLD_MAX", description="Maximum allowed threshold")
     use_adaptive_threshold: bool = Field(default=False, env="USE_ADAPTIVE_THRESHOLD", description="Use Otsu's method for threshold")
     
     # Kamui Enhancement: Mask Quality
@@ -64,10 +64,10 @@ class Settings(BaseSettings):
     
     # Kamui Enhancement: Smart Padding
     use_smart_padding: bool = Field(default=True, env="USE_SMART_PADDING", description="Adapt padding to object shape")
-    adaptive_padding_factor: float = Field(default=1.5, env="ADAPTIVE_PADDING_FACTOR", description="Extra padding for elongated objects")
+    adaptive_padding_factor: float = Field(default=1.3, env="ADAPTIVE_PADDING_FACTOR", description="Extra padding for elongated objects")
     
     # Kamui Enhancement: Object Validation (Relaxed for multi-object scenes)
-    min_object_coverage: float = Field(default=0.01, env="MIN_OBJECT_COVERAGE", description="Minimum object size (2% of image) - lower for small objects")
+    min_object_coverage: float = Field(default=0.008, env="MIN_OBJECT_COVERAGE", description="Minimum object size (2% of image) - lower for small objects")
     max_object_coverage: float = Field(default=0.98, env="MAX_OBJECT_COVERAGE", description="Maximum object size (98% of image)")
     
     # Kamui Enhancement: Quality Monitoring
@@ -75,10 +75,10 @@ class Settings(BaseSettings):
     log_centering_quality: bool = Field(default=True, env="LOG_CENTERING_QUALITY", description="Log object centering quality")
     
     # Kamui Enhancement: Transparency Enhancement for Glass Objects
-    enable_transparency_boost: bool = Field(default=False, env="ENABLE_TRANSPARENCY_BOOST", description="Enhance transparency for glass/transparent objects")
-    transparency_detection_threshold: float = Field(default=0.15, env="TRANSPARENCY_DETECTION_THRESHOLD", description="Variance threshold to detect transparent regions")
-    transparency_boost_factor: float = Field(default=0.6, env="TRANSPARENCY_BOOST_FACTOR", description="How much to reduce alpha (0.6 = 60% reduction for glass)")
-    edge_preserve_width: int = Field(default=10, env="EDGE_PRESERVE_WIDTH", description="Pixels from edge to preserve (not make transparent)")
+    enable_transparency_boost: bool = Field(default=True, env="ENABLE_TRANSPARENCY_BOOST", description="Enhance transparency for glass/transparent objects")
+    transparency_detection_threshold: float = Field(default=0.2, env="TRANSPARENCY_DETECTION_THRESHOLD", description="Variance threshold to detect transparent regions")
+    transparency_boost_factor: float = Field(default=0.8, env="TRANSPARENCY_BOOST_FACTOR", description="How much to reduce alpha (0.6 = 60% reduction for glass)")
+    edge_preserve_width: int = Field(default=12, env="EDGE_PRESERVE_WIDTH", description="Pixels from edge to preserve (not make transparent)")
 
     class Config:
         env_file = ".env"
